@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.venv/
+env/
+venv/
+
+# Build and distribution outputs
+dist/
+dist_electron/
+build/pyinstaller_build/
+build/pyinstaller_spec/
+resources/*.exe
+resources/engine_sidecar
+out/
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*.class
+*.spec
+
+# User data & logs
+*.log
+user_settings.json
+meeting_notes/
+.DS_Store
+Thumbs.db
+
+# Misc & temporary files
+graphify-out/
+.vscode/
+.idea/
+
+# Local secrets and backups
+.env
+.env.*
+!.env.example
+*.backup

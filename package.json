@@ -1,0 +1,91 @@
+{
+  "name": "doudou-electron",
+  "private": true,
+  "version": "1.3.0",
+  "description": "doudou Interview AI Assistant",
+  "author": "doudou interview ai <contact@doudouinterviewai.com>",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "electron": "electron .",
+    "focus-lab": "electron scripts/focus-lab/main.cjs",
+    "build": "vite build",
+    "build:sidecar": "python3 scripts/build_sidecar.py",
+    "postinstall": "electron-builder install-app-deps",
+    "dist": "npm run build && electron-builder --win",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:nsis": "npm run build && electron-builder --win nsis",
+    "dist:all": "npm run build && electron-builder --win nsis portable",
+    "package": "npm run build && electron-packager . \"doudou Assistant\" --platform=win32 --arch=x64 --out=dist_electron --overwrite --icon=public/logo.ico --extra-resource=resources/engine_sidecar.exe --ignore=\"^/(src|build|dist_electron|.git|.venv|tsconfig.*|vite.config.ts|eslint.config.js|.gitignore|README.md)\" --prune=true --asar"
+  },
+  "dependencies": {
+    "electron": "^31.7.7",
+    "framer-motion": "^12.34.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron-builder": "^26.8.1",
+    "electron-packager": "^17.1.2",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "lucide-react": "^0.575.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^7.3.1"
+  },
+  "build": {
+    "appId": "com.doudou.assistant",
+    "productName": "doudou Interview AI",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "public/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/engine_sidecar.exe",
+        "to": "engine_sidecar.exe"
+      }
+    ],
+    "win": {
+      "forceCodeSigning": false,
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "public/logo.ico"
+    },
+    "portable": {
+      "artifactName": "doudou_v${version}_Portable.exe",
+      "requestExecutionLevel": "user"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "allowElevation": true,
+      "shortcutName": "doudou Assistant",
+      "artifactName": "doudou_v${version}_Setup.exe",
+      "installerIcon": "public/logo.ico",
+      "uninstallerIcon": "public/logo.ico",
+      "installerHeaderIcon": "public/logo.ico",
+      "installerSidebar": "public/installer_banner.png",
+      "uninstallerSidebar": "public/installer_banner.png",
+      "runAfterFinish": true
+    }
+  }
+}

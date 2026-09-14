@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>body{font:14px system-ui;margin:0;background:#183047;color:white}header{padding:12px;background:#254960}main{padding:12px;height:150px;overflow:auto}button{padding:8px 14px}p{line-height:1.7}</style>
+<header>本地悬浮窗 · 不接收键盘焦点</header>
+<main><button id="counter">点击计数：0</button><p>仅测试按钮点击与滚动，实际行为取决于系统。</p><p>滚动内容第一段</p><p>滚动内容第二段</p><p>滚动内容第三段</p><p>如需退出，请关闭主实验窗口。</p></main>
+<script>let count=0;document.querySelector('#counter').onclick=event=>{event.currentTarget.textContent=`点击计数：${++count}`};</script></html>

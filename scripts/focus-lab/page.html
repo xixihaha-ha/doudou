@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>本地焦点实验</title>
+<style>body{font:16px system-ui;padding:24px;background:#f3f6fa;color:#182333}textarea{display:block;width:90%;height:70px;margin:16px 0}pre{white-space:pre-wrap;background:white;padding:16px;max-height:240px;overflow:auto}p{max-width:410px;line-height:1.6}</style>
+<h2>本地焦点实验</h2>
+<p>先点击输入框，再点击右上方悬浮窗里的按钮、滚动内容。观察这里是否记录 blur，以及键盘输入是否仍进入此框。</p>
+<p>切到其他应用可作对照。关闭本窗口会结束整个实验。</p>
+<textarea aria-label="键盘焦点测试" placeholder="点击这里后输入文字"></textarea>
+<strong id="status"></strong><pre id="events" aria-live="polite"></pre>
+<script>
+const lines=[];
+function record(name){
+  lines.unshift(`${new Date().toLocaleTimeString()} ${name} | focus=${document.hasFocus()} | visibility=${document.visibilityState}`);
+  document.querySelector('#events').textContent=lines.slice(0,60).join('\n');
+  document.querySelector('#status').textContent=document.hasFocus()?'测试页面拥有焦点':'测试页面没有焦点';
+}
+window.addEventListener('focus',()=>record('focus'));
+window.addEventListener('blur',()=>record('blur'));
+document.addEventListener('visibilitychange',()=>record('visibilitychange'));
+record('ready');
+</script></html>
