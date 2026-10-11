@@ -99,7 +99,15 @@ npm.cmd run electron
 
 ### 实时转写
 
-优先调用 Groq 的 `whisper-large-v3-turbo`。未配置 Groq，或 Groq 报错、返回空文字时，尝试已配置的 OpenAI `whisper-1`。这两个密钥都没有时，会提示缺少转写密钥；其他回答服务商的密钥不能代替此处的转写密钥。
+默认使用豆包语音模型 2.0 的双向流式识别。进入「设置 → API 密钥 → 实时转写」，选择豆包、输入豆包语音控制台的 API Key 并点击保存；按已开通资源选择小时版或并发版。修改后暂停再开始聆听。
+
+使用 `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async`，持续发送 16 kHz 单声道 PCM（包括静音），临时结果替换实时字幕，最终确认的分句进入记录和回答流程。开启二遍识别以修订最终结果。连接错误会显示提示并在 3 秒后重试，不自动切换成分段模式。双向流式使用默认中英文模型；现有的转写语言设置用于 Whisper 分段识别。
+
+也可选择「Groq / OpenAI · 分段识别」，优先调用 Groq 的 `whisper-large-v3-turbo`，失败或无结果时尝试 OpenAI `whisper-1`。
+
+豆包密钥支持 `DOUBAO_API_KEY` 环境变量；对应设置项为 `doubao_api_key`、`asr_provider` 和 `doubao_resource_id`。密钥来自豆包语音控制台，不能使用火山方舟聊天模型的密钥替代。模型 2.0 小时版资源 ID 为 `volc.seedasr.sauc.duration`，并发版为 `volc.seedasr.sauc.concurrent`。详见 [官方流式识别文档](https://docs.volcengine.com/docs/6561/1354869)。开发环境需安装 `requirements-sidecar.txt`；发布安装包前需重新构建 Python sidecar 和前端。
+
+独立诊断豆包鉴权和流式协议可运行 `.venv/Scripts/python.exe -X utf8 scripts/sauc_python/sauc_websocket_demo.py --check`，依赖和音频文件转写用法见 [官方 Python 示例移植说明](scripts/sauc_python/README.md)。
 
 ### AI 回答
 

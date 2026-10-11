@@ -64,6 +64,8 @@ class SidecarEngine:
         self.transcript = TranscriptManager()  # Meeting notes backbone
         
         self.audio.on_transcript_callback = self.on_transcript
+        self.audio.on_partial_callback = lambda text, source: self.send_to_electron(
+            "live-transcript", {"text": text, "source": source, "replace": True})
         # v1.3.1: surface audio warnings/errors (e.g. missing transcription key) to the UI
         self.audio.on_error_callback = self.on_ai_error
         self.ai.on_response_callback = self.on_ai_response
@@ -94,6 +96,9 @@ class SidecarEngine:
 
         self.audio.groq_key = self.ai.groq_key
         self.audio.openai_key = self.ai.openai_key  # v1.3.1: fallback transcription provider
+        self.audio.asr_provider = self.settings.get("asr_provider", "doubao")
+        self.audio.doubao_api_key = self.settings.get("doubao_api_key") or ""
+        self.audio.doubao_resource_id = self.settings.get("doubao_resource_id", "volc.seedasr.sauc.duration")
         # v1.3.1: load transcription language setting (auto / zh / en)
         self.audio.transcript_language = self.settings.get("transcript_language", "auto") or "auto"
         mk = lambda k: f"{k[:4]}...{k[-4:]}" if k else 'NONE'
@@ -420,7 +425,7 @@ class SidecarEngine:
             # Mask ONLY api key fields. "hotkey" contains "key" - a naive
             # substring mask silently breaks hotkey registration in main.js.
             secret_fields = {"groq_api_key", "gemini_api_key", "openai_api_key",
-                             "anthropic_api_key", "deepseek_api_key", "openrouter_api_key"}
+                             "anthropic_api_key", "deepseek_api_key", "openrouter_api_key", "doubao_api_key"}
             for k in list(safe_settings.keys()):
                 if k in secret_fields or "secret" in k.lower():
                     val = str(safe_settings[k])
@@ -449,6 +454,9 @@ class SidecarEngine:
             self.settings.set(key, val)
             if key == "expert_mode":
                 self.ai.set_expert_mode(val)
+            elif key in ("asr_provider", "doubao_api_key", "doubao_resource_id"):
+                # Applied on the next listening session, avoiding a reconnect on each edit.
+                setattr(self.audio, key, val)
             elif key in ("groq_api_key", "groq_key"):
                 self.ai.groq_key = val
                 self.audio.groq_key = val

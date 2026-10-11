@@ -53,6 +53,9 @@ class SettingsManager:
             "text_size": 15,
             "save_transcripts": False,
             "transcript_language": "auto",  # v1.3.1: 音频转写语言（auto / zh / en）
+            "asr_provider": "doubao",
+            "doubao_api_key": os.environ.get("DOUBAO_API_KEY", ""),
+            "doubao_resource_id": "volc.seedasr.sauc.duration",
             "low_credit_alert": True,
             "session_end_warning": True,
             "autoload_resume": False,

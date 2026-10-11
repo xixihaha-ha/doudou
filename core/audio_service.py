@@ -27,6 +27,11 @@ class AudioService:
         self._thread = None
         self.groq_key = None 
         self.openai_key = None           # v1.3.1: fallback transcription via OpenAI Whisper
+        self.asr_provider = "doubao"
+        self.doubao_api_key = ""
+        self.doubao_resource_id = "volc.seedasr.sauc.duration"
+        self._stop_event = threading.Event()
+        self._lifecycle_lock = threading.Lock()
         self.transcript_language = "zh"  # Changed from "auto" to "zh" for better Chinese recognition
 
         # v17.0 Turbo Calibration - Optimized for longer phrases
@@ -36,6 +41,7 @@ class AudioService:
         
         # Callbacks
         self.on_transcript_callback = None 
+        self.on_partial_callback = None
         self.on_error_callback = None
 
     def _warn(self, msg):
@@ -60,20 +66,45 @@ class AudioService:
             pass
 
     def start(self):
+        with self._lifecycle_lock:
+            self._start()
+
+    def _start(self):
         sys.stderr.write(f"DEBUG: Stereo-Compatible Engine (v15.2) starting...\n")
         sys.stderr.flush()
         if self._thread and self._thread.is_alive():
             return
+        self.queue = queue.Queue(maxsize=100)
+        self._stop_event.clear()
         self.is_listening = True
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def stop(self):
+        with self._lifecycle_lock:
+            self._stop()
+
+    def _stop(self):
         self.is_listening = False
+        self._stop_event.set()
         if hasattr(self, '_record_thread') and self._record_thread and self._record_thread.is_alive():
             self._record_thread.join(timeout=1.0)
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
+            self._thread.join(timeout=14.0)
+
+    def _enqueue_audio(self, data, rate):
+        try:
+            self.queue.put_nowait((data, rate))
+        except queue.Full:
+            # Keep capture responsive when a network connection stalls.
+            try:
+                self.queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self.queue.put_nowait((data, rate))
+            except queue.Full:
+                pass
 
     def _run(self):
         # v1.3.1: soundcard WASAPI loopback is the PRIMARY capture path (follows the
@@ -159,7 +190,7 @@ class AudioService:
                         if a.ndim > 1:
                             a = a.mean(axis=1)
                         a = np.ascontiguousarray(a, dtype=np.float32)
-                        self.queue.put((a, rate))
+                        self._enqueue_audio(a, rate)
             except Exception as e:
                 sys.stderr.write(f"DEBUG: Soundcard loopback error: {e}\n")
                 sys.stderr.flush()
@@ -319,7 +350,7 @@ class AudioService:
                             audio_np = audio_np.reshape(-1, config['channels']).mean(axis=1)
                         
                         # Push to transcription processing queue
-                        self.queue.put((audio_np, config['rate']))
+                        self._enqueue_audio(audio_np, config['rate'])
                     except Exception as e:
                         sys.stderr.write(f"DEBUG: Record glitch: {e}\n")
                         break
@@ -332,6 +363,9 @@ class AudioService:
                     except: pass
 
     def _process_loop(self):
+        if self.asr_provider == "doubao":
+            self._stream_doubao()
+            return
         frames = []
         current_rate = 16000
         silence_start = None
@@ -374,6 +408,43 @@ class AudioService:
                     self._transcribe(frames, current_rate)
                     frames = frames[-3:]  # Keep last 3 frames as overlap to prevent word boundary cuts
             except: continue
+
+    def _stream_doubao(self):
+        from core.doubao_asr import DoubaoSession
+        if not self.doubao_api_key:
+            self._warn("请在设置 → API 密钥 → 实时转写中配置豆包语音 API Key。")
+            return
+        partial = lambda text: self.on_partial_callback(text, self.source_label) if self.on_partial_callback else None
+        final = lambda text: self.on_transcript_callback(text, self.source_label) if self.on_transcript_callback else None
+        while self.is_listening:
+            session = DoubaoSession(self.doubao_api_key, self.doubao_resource_id, final, partial)
+            try:
+                session.connect()
+                # Discard capture accumulated during connection establishment.
+                while not self.queue.empty():
+                    try:
+                        self.queue.get_nowait()
+                    except queue.Empty:
+                        break
+                while self.is_listening:
+                    if session.error:
+                        raise session.error
+                    try:
+                        data, rate = self.queue.get(timeout=0.2)
+                    except queue.Empty:
+                        continue
+                    data = np.nan_to_num(data)
+                    self.current_volume = min(100, int(np.sqrt(np.mean(data ** 2)) / 0.05 * 100))
+                    # Include silence so server VAD can finalize each utterance.
+                    session.send(data, rate)
+            except Exception as exc:
+                if self.is_listening:
+                    detail = str(exc) if str(exc).startswith("豆包") else type(exc).__name__
+                    self._warn(f"豆包流式识别连接失败：{detail}。请检查 API Key、资源权限及网络；3 秒后重试。")
+            finally:
+                session.close(graceful=not self.is_listening)
+            if self.is_listening:
+                self._stop_event.wait(3)
 
     def _transcribe(self, frames, rate):
         if not frames: 

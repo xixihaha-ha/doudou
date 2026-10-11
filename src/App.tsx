@@ -320,6 +320,8 @@ function App() {
     stealth_mode: false,
     save_transcripts: false,
     transcript_language: 'auto',
+    asr_provider: 'doubao',
+    doubao_resource_id: 'volc.seedasr.sauc.duration',
     text_size: 15,
     low_credit_alert: true,
     session_end_warning: true,
@@ -343,6 +345,8 @@ function App() {
   })
 
   const [apiPurpose, setApiPurpose] = useState<'实时转写' | '回答'>('实时转写')
+  const [doubaoKey, setDoubaoKey] = useState('')
+  const [showDoubaoKey, setShowDoubaoKey] = useState(false)
   const [apiKeys, setApiKeys] = useState<{ groq: string; openai: string; gemini: string; anthropic: string; deepseek: string; openrouter: string }>({ groq: '', openai: '', gemini: '', anthropic: '', deepseek: '', openrouter: '' })
   const [visibleApiKeys, setVisibleApiKeys] = useState<{ groq: boolean; openai: boolean; gemini: boolean; anthropic: boolean; deepseek: boolean; openrouter: boolean }>({ groq: false, openai: false, gemini: false, anthropic: false, deepseek: false, openrouter: false })
   const apiKeyTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -422,6 +426,11 @@ function App() {
     }));
 
     subs.push(window.electron?.ipcRenderer.on('live-transcript-received', (p: any) => {
+      if (p.replace) {
+        if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+        setLiveTranscript(p.text || '');
+        return;
+      }
       console.log("UI: Live Transcript Received:", p.text);
       if (p.text) {
         setLiveTranscript(prev => {
@@ -925,7 +934,10 @@ function App() {
   };
 
   useEffect(() => {
-    window.electron?.ipcRenderer.send('set-drawer-status', drawerOpen);
+    window.electron?.ipcRenderer.send('set-drawer-status', {
+      open: drawerOpen,
+      requiresInput: drawerMode === 'settings' || drawerMode === 'chat'
+    });
     // Explicitly report resize when drawer toggles — ensures the Electron
     // window resizes reliably even before the ResizeObserver fires the first time.
     requestAnimationFrame(() => {
@@ -934,7 +946,7 @@ function App() {
         window.electron?.ipcRenderer.send('resize-window', { height: h });
       }
     });
-  }, [drawerOpen]);
+  }, [drawerOpen, drawerMode]);
 
   useEffect(() => {
     const isActive = !!(transcript || liveTranscript || history.length > 0);
@@ -1167,7 +1179,7 @@ function App() {
 
       {/* Multi-Pill Breadcrumbs (v19.0) */}
       <AnimatePresence>
-        {(transcript || history.length > 0) && (
+        {(transcript || liveTranscript || history.length > 0) && (
           <motion.div
             key="pill-stack-root"
             layout
@@ -1936,10 +1948,62 @@ function App() {
                             <h3 style={{ marginTop: '16px' }}>{apiPurpose}</h3>
                             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '12px' }}>
                               {apiPurpose === '实时转写'
-                                ? '将听到的语音转换为文字。配置 Groq 或 OpenAI 密钥即可，优先使用 Groq，失败后尝试 OpenAI。'
+                                 ? '豆包支持边说边出字；Groq / OpenAI 使用录音分段识别。切换服务或修改豆包配置后，请暂停再开始聆听。'
                                 : '根据问题生成回答。配置至少一家服务商，并选择回答模型及调用优先级。'}
-                              {' Groq 和 OpenAI 的密钥在两个部分共用，修改后会同步生效。'}
+                              {(apiPurpose === '回答' || settings.asr_provider === 'whisper') && ' Groq 和 OpenAI 的密钥在两个部分共用，修改后会同步生效。'}
                             </p>
+
+                            {apiPurpose === '实时转写' && (
+                              <div className="setting-card" style={{ padding: '12px', marginBottom: '16px' }}>
+                                <div className="setting-label"><span>语音识别服务</span></div>
+                                <select className="api-model-select no-drag" value={settings.asr_provider || 'doubao'}
+                                  onChange={(e) => updateSetting('asr_provider', e.target.value)}>
+                                  <option value="doubao">豆包 · 双向流式识别</option>
+                                  <option value="whisper">Groq / OpenAI · 分段识别</option>
+                                </select>
+                                {settings.asr_provider !== 'whisper' && (
+                                  <>
+                                    <div className="setting-label" style={{ marginTop: '12px' }}>
+                                      <span>豆包语音 API Key</span>
+                                      <span className={`key-status-chip ${settings.doubao_api_key ? 'configured' : 'not-set'}`}>
+                                        {settings.doubao_api_key ? '已配置' : '未设置'}
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                      <input className="api-key-input no-drag" type={showDoubaoKey ? 'text' : 'password'}
+                                        placeholder="输入豆包语音控制台创建的 API Key" value={doubaoKey}
+                                        onChange={(e) => setDoubaoKey(e.target.value)} />
+                                      <button className="icon-circle no-drag" type="button" aria-label="显示或隐藏豆包密钥"
+                                        onClick={() => setShowDoubaoKey(v => !v)}>
+                                        {showDoubaoKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                      </button>
+                                      <button className="no-drag" type="button" disabled={!doubaoKey.trim()}
+                                        onClick={() => {
+                                          updateSetting('doubao_api_key', doubaoKey.trim());
+                                          setDoubaoKey('');
+                                          showToast('豆包密钥已保存，暂停后重新开始聆听即可生效', 'success');
+                                        }}>保存</button>
+                                      {settings.doubao_api_key && <button className="no-drag" type="button"
+                                        onClick={() => { updateSetting('doubao_api_key', ''); setDoubaoKey(''); }}>清除</button>}
+                                    </div>
+                                    <div className="setting-label" style={{ marginTop: '12px' }}><span>豆包识别模型与计费方式</span></div>
+                                    <select className="api-model-select no-drag"
+                                      value={settings.doubao_resource_id || 'volc.seedasr.sauc.duration'}
+                                      onChange={(e) => updateSetting('doubao_resource_id', e.target.value)}>
+                                      <option value="volc.seedasr.sauc.duration">模型 2.0 · 小时版</option>
+                                      <option value="volc.seedasr.sauc.concurrent">模型 2.0 · 并发版</option>
+                                    </select>
+                                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                      在豆包语音控制台开通对应的流式识别服务。临时字幕实时更新，确认后的文字才用于生成回答。
+                                    </p>
+                                    <button className="no-drag" type="button"
+                                      onClick={() => window.electron?.ipcRenderer.send('open-external-url', 'https://console.volcengine.com/speech/new/setting/apikeys')}>
+                                      获取豆包语音 API Key
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
 
                             {apiPurpose === '回答' && (
                             <div className="setting-card" style={{ marginBottom: '16px', padding: '12px' }}>
@@ -2014,6 +2078,7 @@ function App() {
                                 </button>
                               ))}
                             </div>
+                            {(apiPurpose === '回答' || settings.asr_provider === 'whisper') && (
                             <div className="setting-card">
                               {([
                                 { key: 'groq', label: 'Groq', placeholder: 'gsk_...' },
@@ -2100,6 +2165,7 @@ function App() {
                                 );
                               })}
                             </div>
+                            )}
                           </div>
                         </motion.div>
                       )}

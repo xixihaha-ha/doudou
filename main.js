@@ -37,6 +37,7 @@ let sidecarProcess = null;
 let tray = null;
 // Like focus-lab: mouse interaction does not activate the assistant by default.
 let inputMode = false;
+let drawerRequiresInput = false;
 function showAssistant() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (inputMode) {
@@ -50,7 +51,7 @@ function showAssistant() {
 function setInputMode(enabled) {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     inputMode = enabled;
-    mainWindow.setFocusable(enabled);
+    mainWindow.setFocusable(enabled || drawerRequiresInput);
     showAssistant();
 }
 let sidecarRestartAttempts = 0;
@@ -488,6 +489,9 @@ function startSidecar() {
     let sidecarBuffer = '';
     let sidecarStarted = false;
 
+    // Decode across chunk boundaries so split Chinese UTF-8 characters survive.
+    sidecarProcess.stdout.setEncoding('utf8');
+    sidecarProcess.stderr.setEncoding('utf8');
     sidecarProcess.stdout.on('data', (data) => {
         // Sidecar sent data = it's alive. Reset restart counter on first message.
         if (!sidecarStarted) {
@@ -702,8 +706,13 @@ ipcMain.handle('check-sidecar-health', () => {
     };
 });
 
-ipcMain.on('set-drawer-status', (_, open) => {
-    isDrawerOpen = open;
+ipcMain.on('set-drawer-status', (_, state) => {
+    isDrawerOpen = typeof state === 'boolean' ? state : Boolean(state?.open);
+    drawerRequiresInput = isDrawerOpen && Boolean(state?.requiresInput);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setFocusable(inputMode || drawerRequiresInput);
+        if (drawerRequiresInput) mainWindow.focus();
+    }
 });
 
 ipcMain.on('set-subpill-status', (_, active) => {
