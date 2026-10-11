@@ -1,6 +1,6 @@
 const electron = require('electron');
 const { join, dirname } = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { readFileSync, writeFileSync, appendFileSync, existsSync } = require('fs');
 
 // Destructure Electron modules
@@ -128,7 +128,7 @@ function createWindow() {
         transparent: true,
         alwaysOnTop: true,
         focusable: inputMode,
-        skipTaskbar: false,
+        skipTaskbar: true,
         maximizable: false,
         resizable: false,
         fullscreenable: false,
@@ -454,6 +454,7 @@ function startSidecar() {
 
     sidecarProcess.on('exit', (code, signal) => {
         logToFile(`Sidecar Process exited with code ${code} and signal ${signal}`);
+        if (isQuitting) return;
 
         // Reset attempts on clean exit (code 0 = intentional shutdown)
         if (code === 0) {
@@ -559,7 +560,7 @@ ipcMain.on('set-opacity', (_, level) => {
 ipcMain.on('update-stealth', (_, enabled) => {
     if (mainWindow) {
         mainWindow.setContentProtection(enabled);
-        mainWindow.setSkipTaskbar(enabled);
+        mainWindow.setSkipTaskbar(true);
     }
 });
 
@@ -794,10 +795,28 @@ app.whenReady().then(() => {
     startMouseMonitor();
 });
 
+// Set this before Electron closes windows, so close-to-tray cannot cancel quit.
+app.on('before-quit', () => {
+    isQuitting = true;
+});
+
 app.on("will-quit", () => {
     if (mouseMonitorInterval) clearInterval(mouseMonitorInterval);
     globalShortcut.unregisterAll();
-    if (sidecarProcess) sidecarProcess.kill();
+    if (sidecarProcess && sidecarProcess.exitCode === null) {
+        // PyInstaller's one-file launcher has a child process on Windows.
+        // Stop the whole tree to release audio capture and leave no engine behind.
+        if (process.platform === 'win32' && sidecarProcess.pid) {
+            const result = spawnSync('taskkill', ['/PID', String(sidecarProcess.pid), '/T', '/F'], {
+                windowsHide: true,
+                timeout: 5000
+            });
+            if (result.error || result.status !== 0) sidecarProcess.kill();
+        } else {
+            sidecarProcess.kill();
+        }
+    }
+    tray?.destroy();
 });
 
 app.on('window-all-closed', () => {

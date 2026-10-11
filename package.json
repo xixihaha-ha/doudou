@@ -19,7 +19,6 @@
     "package": "npm run build && electron-packager . \"doudou Assistant\" --platform=win32 --arch=x64 --out=dist_electron --overwrite --icon=public/logo.ico --extra-resource=resources/engine_sidecar.exe --ignore=\"^/(src|build|dist_electron|.git|.venv|tsconfig.*|vite.config.ts|eslint.config.js|.gitignore|README.md)\" --prune=true --asar"
   },
   "dependencies": {
-    "electron": "^31.7.7",
     "framer-motion": "^12.34.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
@@ -30,6 +29,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^31.7.7",
     "electron-builder": "^26.8.1",
     "electron-packager": "^17.1.2",
     "electron-vite": "^5.0.0",
